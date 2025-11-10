@@ -1,67 +1,214 @@
-import { useState, useEffect } from 'react';
-import { Play, Pause, RotateCcw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Play, Pause, RotateCcw, Bell, BellOff } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import useLocalStorage from '../../hooks/useLocalStorage';
+
+interface TimerState {
+  isRunning: boolean;
+  totalSeconds: number;
+  initialSeconds: number;
+  startTime: number | null;
+  endTime: number | null;
+  customMinutes: string;
+}
 
 export function TimerPage() {
-  const [minutes, setMinutes] = useState(25);
+  const [timerState, setTimerState] = useLocalStorage<TimerState>('timerState', {
+    isRunning: false,
+    totalSeconds: 25 * 60,
+    initialSeconds: 25 * 60,
+    startTime: null,
+    endTime: null,
+    customMinutes: '25'
+  });
+
+  const [minutes, setMinutes] = useState(0);
   const [seconds, setSeconds] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
-  const [customMinutes, setCustomMinutes] = useState('25');
-  const [totalSeconds, setTotalSeconds] = useState(25 * 60);
-  const [initialSeconds, setInitialSeconds] = useState(25 * 60);
+  const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage('notificationsEnabled', false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const originalTitle = useRef(document.title);
 
+  // Request notification permission on component mount
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then((permission) => {
+        setNotificationsEnabled(permission === 'granted');
+      });
+    } else if (Notification.permission === 'granted') {
+      setNotificationsEnabled(true);
+    }
+  }, [setNotificationsEnabled]);
 
-    if (isRunning) {
-      interval = setInterval(() => {
-        if (seconds === 0) {
-          if (minutes === 0) {
-            setIsRunning(false);
-          } else {
-            setMinutes(minutes - 1);
-            setSeconds(59);
-            setTotalSeconds(totalSeconds - 1);
-          }
-        } else {
-          setSeconds(seconds - 1);
-          setTotalSeconds(totalSeconds - 1);
-        }
-      }, 1000);
+  // Calculate current time remaining based on start time and elapsed time
+  const calculateTimeRemaining = () => {
+    if (!timerState.isRunning || !timerState.startTime) {
+      return timerState.totalSeconds;
     }
 
-    return () => {
-      if (interval) clearInterval(interval);
+    const now = Date.now();
+    const elapsed = Math.floor((now - timerState.startTime) / 1000);
+    const remaining = Math.max(0, timerState.totalSeconds - elapsed);
+    
+    return remaining;
+  };
+
+  // Update display every second
+  useEffect(() => {
+    const updateDisplay = () => {
+      const remaining = calculateTimeRemaining();
+      const mins = Math.floor(remaining / 60);
+      const secs = remaining % 60;
+      
+      setMinutes(mins);
+      setSeconds(secs);
+
+      // Update page title to show timer
+      if (timerState.isRunning) {
+        document.title = `⏰ ${formatTime(mins, secs)} - ${originalTitle.current}`;
+      } else {
+        document.title = originalTitle.current;
+      }
+
+      // Check if timer finished
+      if (timerState.isRunning && remaining === 0) {
+        handleTimerComplete();
+      }
     };
-  }, [isRunning, minutes, seconds, totalSeconds]);
+
+    // Update immediately
+    updateDisplay();
+
+    // Set up interval to update every second
+    const interval = setInterval(updateDisplay, 1000);
+
+    return () => {
+      clearInterval(interval);
+      // Restore original title when component unmounts
+      document.title = originalTitle.current;
+    };
+  }, [timerState]);
+
+  const showNotification = (title: string, body: string) => {
+    if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag: 'timer',
+        requireInteraction: true
+      });
+
+      // Auto-close notification after 10 seconds
+      setTimeout(() => {
+        notification.close();
+      }, 10000);
+
+      return notification;
+    }
+  };
+
+  const handleTimerComplete = () => {
+    setTimerState({
+      ...timerState,
+      isRunning: false,
+      startTime: null,
+      endTime: Date.now()
+    });
+
+    showNotification('🎉 Timer Complete!', 'Your pomodoro session has finished. Time for a break!');
+    
+    // Play a sound if possible (optional)
+    try {
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmzhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQcZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjuZ3fLKeiQFNH/N8tyOOQc=');
+      audio.play().catch(() => {
+        // Audio play failed, ignore silently
+      });
+    } catch (e) {
+      // Audio not supported, ignore
+    }
+  };
 
   const handleStart = () => {
-    setIsRunning(true);
+    const now = Date.now();
+    setTimerState({
+      ...timerState,
+      isRunning: true,
+      startTime: now,
+      endTime: null
+    });
+
+    showNotification('⏱️ Timer Started', `${Math.floor(timerState.totalSeconds / 60)} minute timer has begun!`);
   };
 
   const handlePause = () => {
-    setIsRunning(false);
+    const remaining = calculateTimeRemaining();
+    setTimerState({
+      ...timerState,
+      isRunning: false,
+      startTime: null,
+      totalSeconds: remaining
+    });
+
+    showNotification('⏸️ Timer Paused', `Timer paused with ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')} remaining`);
   };
 
   const handleReset = () => {
-    setIsRunning(false);
-    const mins = parseInt(customMinutes) || 25;
-    setMinutes(mins);
-    setSeconds(0);
+    const mins = parseInt(timerState.customMinutes) || 25;
     const total = mins * 60;
-    setTotalSeconds(total);
-    setInitialSeconds(total);
+    
+    setTimerState({
+      ...timerState,
+      isRunning: false,
+      totalSeconds: total,
+      initialSeconds: total,
+      startTime: null,
+      endTime: null
+    });
+
+    document.title = originalTitle.current;
   };
 
   const handleSetCustomTime = () => {
-    const mins = parseInt(customMinutes) || 25;
-    setMinutes(mins);
-    setSeconds(0);
-    setIsRunning(false);
+    const mins = parseInt(timerState.customMinutes) || 25;
     const total = mins * 60;
-    setTotalSeconds(total);
-    setInitialSeconds(total);
+    
+    setTimerState({
+      ...timerState,
+      isRunning: false,
+      totalSeconds: total,
+      initialSeconds: total,
+      startTime: null,
+      endTime: null
+    });
+  };
+
+  const setCustomMinutes = (value: string) => {
+    setTimerState({
+      ...timerState,
+      customMinutes: value
+    });
+  };
+
+  const setPresetTime = (mins: number) => {
+    const total = mins * 60;
+    setTimerState({
+      ...timerState,
+      customMinutes: mins.toString(),
+      isRunning: false,
+      totalSeconds: total,
+      initialSeconds: total,
+      startTime: null,
+      endTime: null
+    });
+  };
+
+  const toggleNotifications = async () => {
+    if (!notificationsEnabled && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      setNotificationsEnabled(permission === 'granted');
+    } else {
+      setNotificationsEnabled(!notificationsEnabled);
+    }
   };
 
   const formatTime = (mins: number, secs: number) => {
@@ -69,14 +216,26 @@ export function TimerPage() {
   };
 
   // Calculate progress percentage for hourglass animation
-  const progress = initialSeconds > 0 ? (totalSeconds / initialSeconds) * 100 : 100;
+  const currentRemaining = calculateTimeRemaining();
+  const progress = timerState.initialSeconds > 0 ? (currentRemaining / timerState.initialSeconds) * 100 : 100;
   const topSandHeight = progress;
   const bottomSandHeight = 100 - progress;
 
   return (
     <div className="h-full flex items-center justify-center p-6">
       <div className="max-w-4xl w-full">
-        <h1 className="mb-8 text-center">Pomodoro Timer</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1>Pomodoro Timer</h1>
+          <Button
+            onClick={toggleNotifications}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+            {notificationsEnabled ? 'Notifications On' : 'Enable Notifications'}
+          </Button>
+        </div>
 
         <div className="flex items-center justify-center gap-12 mb-8">
           {/* Hourglass Visual */}
@@ -137,7 +296,7 @@ export function TimerPage() {
               </g>
               
               {/* Falling sand stream animation when running */}
-              {isRunning && topSandHeight > 0 && (
+              {timerState.isRunning && topSandHeight > 0 && (
                 <>
                   <line
                     x1="100"
@@ -165,7 +324,7 @@ export function TimerPage() {
           <div className="space-y-6">
             <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex gap-3 mb-4">
-                {!isRunning ? (
+                {!timerState.isRunning ? (
                   <Button onClick={handleStart} size="lg" className="gap-2 flex-1">
                     <Play className="w-5 h-5" />
                     Start
@@ -184,7 +343,7 @@ export function TimerPage() {
               
               <div className="pt-4 border-t border-border">
                 <div className="text-center text-sm text-muted-foreground mb-2">
-                  {isRunning ? 'Timer Running' : 'Ready to Start'}
+                  {timerState.isRunning ? 'Timer Running' : 'Ready to Start'}
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div
@@ -200,7 +359,7 @@ export function TimerPage() {
               <div className="flex gap-2 mb-3">
                 <Input
                   type="number"
-                  value={customMinutes}
+                  value={timerState.customMinutes}
                   onChange={(e) => setCustomMinutes(e.target.value)}
                   min="1"
                   max="120"
@@ -210,16 +369,7 @@ export function TimerPage() {
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={() => {
-                    setCustomMinutes('5');
-                    const mins = 5;
-                    setMinutes(mins);
-                    setSeconds(0);
-                    setIsRunning(false);
-                    const total = mins * 60;
-                    setTotalSeconds(total);
-                    setInitialSeconds(total);
-                  }}
+                  onClick={() => setPresetTime(5)}
                   variant="outline"
                   size="sm"
                   className="flex-1"
@@ -227,16 +377,7 @@ export function TimerPage() {
                   5 min
                 </Button>
                 <Button
-                  onClick={() => {
-                    setCustomMinutes('15');
-                    const mins = 15;
-                    setMinutes(mins);
-                    setSeconds(0);
-                    setIsRunning(false);
-                    const total = mins * 60;
-                    setTotalSeconds(total);
-                    setInitialSeconds(total);
-                  }}
+                  onClick={() => setPresetTime(15)}
                   variant="outline"
                   size="sm"
                   className="flex-1"
@@ -244,16 +385,7 @@ export function TimerPage() {
                   15 min
                 </Button>
                 <Button
-                  onClick={() => {
-                    setCustomMinutes('25');
-                    const mins = 25;
-                    setMinutes(mins);
-                    setSeconds(0);
-                    setIsRunning(false);
-                    const total = mins * 60;
-                    setTotalSeconds(total);
-                    setInitialSeconds(total);
-                  }}
+                  onClick={() => setPresetTime(25)}
                   variant="outline"
                   size="sm"
                   className="flex-1"
@@ -264,6 +396,14 @@ export function TimerPage() {
             </div>
           </div>
         </div>
+
+        {/* Status Information */}
+        {timerState.isRunning && (
+          <div className="text-center text-sm text-muted-foreground">
+            <p>Timer is running in the background - you'll get notified when it completes!</p>
+            <p className="mt-1">Close this tab or minimize the browser - the timer will continue.</p>
+          </div>
+        )}
       </div>
     </div>
   );
