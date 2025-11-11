@@ -7,9 +7,10 @@ import { CoursesPage } from './components/pages/CoursesPage';
 import { MotivationPage } from './components/pages/MotivationPage';
 import { DebriefPage } from './components/pages/DebriefPage';
 import { SettingsPage } from './components/pages/SettingsPage';
+import { WebsiteBlockerPage } from './components/pages/WebsiteBlockerPage';
 import useLocalStorage from './hooks/useLocalStorage';
 
-type PageType = 'planner' | 'tasks' | 'timer' | 'courses' | 'motivation' | 'debrief' | 'settings';
+type PageType = 'planner' | 'tasks' | 'timer' | 'courses' | 'motivation' | 'debrief' | 'blocker' | 'settings';
 
 // Shared task types
 export type PlannerTask = {
@@ -58,6 +59,8 @@ export default function App() {
         return <MotivationPage />;
       case 'debrief':
         return <DebriefPage />;
+      case 'blocker':
+        return <WebsiteBlockerPage />;
       case 'settings':
         return <SettingsPage />;
       default:

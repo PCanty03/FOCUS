@@ -1,4 +1,4 @@
-import { CheckSquare, Clock, BookOpen, Sparkles, FileText, Settings } from 'lucide-react';
+import { CheckSquare, Clock, BookOpen, Sparkles, FileText, Settings, Shield } from 'lucide-react';
 
 type SidebarProps = {
   activePage: string;
@@ -13,6 +13,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
     { id: 'courses', label: 'Courses', icon: BookOpen },
     { id: 'motivation', label: 'Motivation', icon: Sparkles },
     { id: 'debrief', label: 'Debrief', icon: FileText },
+    { id: 'blocker', label: 'Website Blocker', icon: Shield },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
